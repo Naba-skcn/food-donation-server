@@ -49,6 +49,12 @@ async function run() {
         const result = await featuredCollection.insertOne(foodData);
         res.send(result);
     })
+    app.get('/foods/:email', async(req, res) =>{
+        const email = req.params.email
+        const query = {donatorEmail : email}
+        const result = await featuredCollection.find(query).toArray()
+        res.send(result)
+    })
 
 
     // Send a ping to confirm a successful connection
