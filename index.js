@@ -61,7 +61,29 @@ async function run() {
         const result = await featuredCollection.deleteOne(query)
         res.send(result);
     })
-
+    
+    app.put('/food/:id', async (req, res) => {
+        const id = req.params.id;
+        const foodData = req.body;
+    
+        // Extract _id from the foodData to prevent modifying it
+        const { _id, ...updatedData } = foodData;
+    
+        const query = { _id: new ObjectId(id) };
+        const options = { upsert: true };
+        const updateDoc = {
+            $set: updatedData, // Use the updated data without _id
+        };
+    
+        try {
+            const result = await featuredCollection.updateOne(query, updateDoc, options);
+            res.send(result);
+        } catch (error) {
+            console.error('Error updating food:', error);
+            res.status(500).send('Internal Server Error');
+        }
+    });
+    
 
 
 
