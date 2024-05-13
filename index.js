@@ -42,6 +42,13 @@ async function run() {
         const result = await featuredCollection.findOne(query)
         res.send(result);
     })
+ 
+    app.post('/addFood', async(req, res) =>{
+        const foodData = req.body;
+        console.log(foodData)
+        const result = await featuredCollection.insertOne(foodData);
+        res.send(result);
+    })
 
 
     // Send a ping to confirm a successful connection
