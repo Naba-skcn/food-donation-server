@@ -83,8 +83,29 @@ async function run() {
             res.status(500).send('Internal Server Error');
         }
     });
-    
 
+
+
+app.put('/food/:id/request', async (req, res) => {
+    const id = req.params.id;
+        // Update the food status to "Requested"
+        const query = { _id: new ObjectId(id) };
+        const updateDoc = {
+            $set: {
+                foodStatus: 'Requested'
+            }
+        };
+        const result = await featuredCollection.updateOne(query, updateDoc);
+        res.send(result);
+});
+
+    
+    app.get('/requested/:email', async(req, res) =>{
+        const email = req.params.email
+        const query = {donatorEmail : email}
+        const result = await featuredCollection.find(query).toArray()
+        res.send(result)
+    })
 
 
     // Send a ping to confirm a successful connection
