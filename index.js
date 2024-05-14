@@ -29,6 +29,7 @@ async function run() {
     //await client.connect();
 
     const featuredCollection = client.db('featuredDB').collection('featured');
+    const requestedCollection = client.db('requestedDB').collection('requested');
 
 
     app.get('/featured-foods', async (req, res) => {
@@ -86,26 +87,77 @@ async function run() {
 
 
 
-app.put('/food/:id/request', async (req, res) => {
-    const id = req.params.id;
-        // Update the food status to "Requested"
-        const query = { _id: new ObjectId(id) };
-        const updateDoc = {
-            $set: {
-                foodStatus: 'Requested'
+    app.put('/food/:id/request', async (req, res) => {
+        const id = req.params.id;
+        const { additionalNotes } = req.body;
+        const { donatorEmail } = req.body;
+        const {requestDate} = req.body;
+        try {
+            const query = { _id: new ObjectId(id) };
+            const updateDoc = {
+                $set: {
+                    foodStatus: 'Requested',
+                    additionalNotes: additionalNotes,
+                    donatorEmail : donatorEmail,
+                    requestDate : requestDate,
+                }
+            };
+            // Update the food status and additional notes
+            const result = await featuredCollection.updateOne(query, updateDoc);
+    
+            // Find the requested food document
+            const requestedFood = await featuredCollection.findOne(query);
+            if (!requestedFood) {
+                throw new Error('Food not found');
             }
-        };
+    
+            // Insert the requested food into the requestedCollection
+            const requestedData = {
+                ...requestedFood,
+                donatorEmail: requestedFood.donatorEmail // Add the donatorEmail field
+            };
+            delete requestedData._id; // Remove the _id field to prevent duplication
+            const insertResult = await requestedCollection.insertOne(requestedData);
+    
+            res.json({ result, insertResult });
+        } catch (error) {
+            console.error('Error requesting food:', error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
+    
+    app.get('/requested-foods/:email', async (req, res) => {
+        try {
+            const email = req.params.email;
+            const query = { donatorEmail : email };
+            const requestedFoods = await requestedCollection.find(query).toArray();
+            res.json(requestedFoods);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Internal Server Error' });
+        }
+    });
+    
+
+app.put('/food/:id', async (req, res) => {
+    const id = req.params.id;
+    const additionalNotes = req.body.additionalNotes;
+
+    const query = { _id: new ObjectId(id) };
+    const updateDoc = {
+        $set: {
+            additionalNotes: additionalNotes,
+        }
+    };
+
+    try {
         const result = await featuredCollection.updateOne(query, updateDoc);
         res.send(result);
+    } catch (error) {
+        console.error('Error updating food:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
-
-    
-    app.get('/requested/:email', async(req, res) =>{
-        const email = req.params.email
-        const query = {donatorEmail : email}
-        const result = await featuredCollection.find(query).toArray()
-        res.send(result)
-    })
 
 
     // Send a ping to confirm a successful connection
