@@ -44,18 +44,31 @@ async function run() {
         res.send(result);
     })
  
-    app.post('/addFood', async(req, res) =>{
+    app.post('/addFood', async(req, res) => {
         const foodData = req.body;
-        console.log(foodData)
-        const result = await featuredCollection.insertOne(foodData);
-        res.send(result);
-    })
-    app.get('/foods/:email', async(req, res) =>{
-        const email = req.params.email
-        const query = {donatorEmail : email}
-        const result = await featuredCollection.find(query).toArray()
-        res.send(result)
-    })
+        const foodDataWithMetadata = { ...foodData, addedBy: 'AddFood' };
+    
+        try {
+            const result = await featuredCollection.insertOne(foodDataWithMetadata);
+            res.send(result);
+        } catch (error) {
+            console.error('Error adding food:', error);
+            res.status(500).send('Internal Server Error');
+        }
+    });
+    
+    app.get('/foods/:email', async(req, res) => {
+        try {
+            const email = req.params.email;
+            const query = { donatorEmail: email, addedBy: 'AddFood' }; 
+            const result = await featuredCollection.find(query).toArray();
+            res.send(result);
+        } catch (error) {
+            console.error('Error fetching foods:', error);
+            res.status(500).send('Internal Server Error');
+        }
+    });
+
     app.delete('/food/:id', async(req, res) =>{
         const id = req.params.id;
         const query = {_id: new ObjectId(id)}
@@ -66,14 +79,12 @@ async function run() {
     app.put('/food/:id', async (req, res) => {
         const id = req.params.id;
         const foodData = req.body;
-    
-        // Extract _id from the foodData to prevent modifying it
         const { _id, ...updatedData } = foodData;
     
         const query = { _id: new ObjectId(id) };
         const options = { upsert: true };
         const updateDoc = {
-            $set: updatedData, // Use the updated data without _id
+            $set: updatedData, 
         };
     
         try {
@@ -102,21 +113,16 @@ async function run() {
                     requestDate : requestDate,
                 }
             };
-            // Update the food status and additional notes
             const result = await featuredCollection.updateOne(query, updateDoc);
-    
-            // Find the requested food document
             const requestedFood = await featuredCollection.findOne(query);
             if (!requestedFood) {
                 throw new Error('Food not found');
             }
-    
-            // Insert the requested food into the requestedCollection
             const requestedData = {
                 ...requestedFood,
-                donatorEmail: requestedFood.donatorEmail // Add the donatorEmail field
+                donatorEmail: requestedFood.donatorEmail 
             };
-            delete requestedData._id; // Remove the _id field to prevent duplication
+            delete requestedData._id; 
             const insertResult = await requestedCollection.insertOne(requestedData);
     
             res.json({ result, insertResult });
