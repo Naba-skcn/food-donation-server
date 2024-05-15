@@ -1,13 +1,19 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
 
 //middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5174'],
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 console.log(process.env.DB_PASS)
 
@@ -23,6 +29,21 @@ const client = new MongoClient(uri, {
   }
 });
 
+// middlewares
+// const logger = async(req, res, next) =>{
+//     console.log('called', req.host, req.originalUrl)
+//     next();
+// }
+const verifyToken = async(req, res, next) =>{
+    const token = req.cookies.token;
+    console.log('value of token', token);
+    if(!token){
+        return res.status(401).send({message: 'forbidden'});
+    }
+    next();
+}
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -31,7 +52,21 @@ async function run() {
     const featuredCollection = client.db('featuredDB').collection('featured');
     const requestedCollection = client.db('requestedDB').collection('requested');
 
+    //Auth related api
+     app.post('/jwt', async(req, res) =>{
+        const user = req.body;
+        console.log(user);
+        const token = jwt.sign(user,process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'})
+        res
+        .cookie('token', token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: 'none'
+        })
+        .send({success: true})
+     });
 
+    //services related api
     app.get('/featured-foods', async (req, res) => {
             const featuredFoods = await featuredCollection.find().sort({ foodQuantity: -1 }).toArray();
             res.json(featuredFoods);
