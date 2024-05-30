@@ -1,19 +1,25 @@
-const express = require('express');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
+const express = require('express')
+const cors = require('cors')
+const jwt = require('jsonwebtoken')
 const cookieParser = require('cookie-parser')
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 require('dotenv').config()
-const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 9000
+const app = express()
 
-//middleware
-app.use(cors({
-    origin: ['http://localhost:5174'],
-    credentials: true
-}));
-app.use(express.json());
-app.use(cookieParser());
+const corsOptions = {
+  origin: [
+     'http://localhost:5173',
+     'http://localhost:5174',
+    'https://solosphere.web.app',
+    'https://glistening-paletas-065bec.netlify.app'
+  ],
+  credentials: true,
+  optionSuccessStatus: 200,
+}
+app.use(cors(corsOptions))
+app.use(express.json())
+app.use(cookieParser())
 
 console.log(process.env.DB_PASS)
 
@@ -51,7 +57,10 @@ async function run() {
 
     const featuredCollection = client.db('featuredDB').collection('featured');
     const requestedCollection = client.db('requestedDB').collection('requested');
-
+    const donationDB = client.db('donationDB');
+    const driveCollection = donationDB.collection('drive');
+    const participantsCollection = donationDB.collection('participants');
+    const donationsCollection = donationDB.collection('donation');
     //Auth related api
      app.post('/jwt', async(req, res) =>{
         const user = req.body;
@@ -200,9 +209,93 @@ app.put('/food/:id', async (req, res) => {
     }
 });
 
+//new
+// Get the current drive data
+app.get('/api/drive', async (req, res) => {
+    try {
+      const driveData = await driveCollection.findOne({});
+      if (!driveData) {
+        return res.status(404).json({ error: 'Drive not found' });
+      }
+      res.json(driveData);
+    } catch (error) {
+      console.error('Error fetching drive data:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  // Invite a participant
+  app.post('/api/drive/invite', async (req, res) => {
+    try {
+      const { email } = req.body;
+      const participant = { email, contribution: 0 };
+      await participantsCollection.insertOne(participant);
+      res.status(200).json({ message: 'Participant invited successfully' });
+    } catch (error) {
+      console.error('Error inviting participant:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  // Process a donation
+  app.post('/api/drive/donate', async (req, res) => {
+    try {
+      const { email, amount } = req.body;
+
+      // Update the participant's contribution
+      const participant = await participantsCollection.findOneAndUpdate(
+        { email },
+        { $inc: { contribution: amount } },
+        { returnOriginal: false, upsert: true }
+      );
+
+      // Insert the donation record
+      const donation = {
+        email,
+        amount,
+        timestamp: new Date()
+      };
+      await donationsCollection.insertOne(donation);
+
+      // Update the drive progress
+      const driveData = await driveCollection.findOne({});
+      if (driveData) {
+        const newProgress = driveData.progress + amount;
+        await driveCollection.updateOne(
+          { _id: driveData._id },
+          { $set: { progress: newProgress } }
+        );
+      } else {
+        const goal = 500; // You can set a default goal or fetch it from somewhere
+        await driveCollection.insertOne({
+          goal,
+          progress: amount,
+          leaderboard: []
+        });
+      }
+
+      // Update the leaderboard
+      const updatedParticipants = await participantsCollection.find().sort({ contribution: -1 }).toArray();
+      await driveCollection.updateOne(
+        {},
+        { $set: { leaderboard: updatedParticipants } }
+      );
+
+      res.status(200).json({ message: 'Donation successful' });
+    } catch (error) {
+      console.error('Error processing donation:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+       
+
+
+    
+
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    //await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
